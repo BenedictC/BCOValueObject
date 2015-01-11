@@ -216,6 +216,7 @@
 		8290D64C1A52C312009B723B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				PRODUCT_NAME = BCOValueObject;
 			};
 			name = Debug;
@@ -223,6 +224,7 @@
 		8290D64D1A52C312009B723B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				PRODUCT_NAME = BCOValueObject;
 			};
 			name = Release;

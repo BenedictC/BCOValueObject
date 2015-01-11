@@ -18,13 +18,6 @@
 
 @implementation BCVMutablePerson
 
--(void)setName:(NSString *)name
-{
-    [self setValue:name forKey:@"name"];
-}
-
-
-
 -(void)setTransform:(CATransform3D)transform
 {
     [self setValue:[NSValue valueWithCATransform3D:transform] forKey:@"transform"];
