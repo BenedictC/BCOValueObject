@@ -35,29 +35,38 @@
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
 
-        BCVPerson *person = [BCVPerson new];
-        BCVMutablePerson *anotherPerson = [person mutableCopy];
+        BCVMutablePerson *mutablePerson = [BCVMutablePerson new];
 
         BVOObserver *observer = [BVOObserver new];
 
-        [anotherPerson addObserver:observer forKeyPath:@"name" options:0 context:NULL];
-        [anotherPerson addObserver:observer forKeyPath:@"dateOfBirth" options:0 context:NULL];
-        [anotherPerson addObserver:observer forKeyPath:@"arf" options:0 context:NULL];
-        [anotherPerson addObserver:observer forKeyPath:@"transform" options:0 context:NULL];
-        [anotherPerson addObserver:observer forKeyPath:@"range" options:0 context:NULL];
+        [mutablePerson addObserver:observer forKeyPath:@"name" options:0 context:NULL];
+        [mutablePerson addObserver:observer forKeyPath:@"dateOfBirth" options:0 context:NULL];
+        [mutablePerson addObserver:observer forKeyPath:@"arf" options:0 context:NULL];
+        [mutablePerson addObserver:observer forKeyPath:@"transform" options:0 context:NULL];
+        [mutablePerson addObserver:observer forKeyPath:@"range" options:0 context:NULL];
 
-        anotherPerson.arf = 7;
-        anotherPerson.arf = 8;
-        anotherPerson.dateOfBirth = [NSDate date];
-        anotherPerson.name = @"afsgdf";
-        anotherPerson.transform = CATransform3DMakeRotation(M_1_PI, 4, 8, 16);
-        anotherPerson.range = NSMakeRange(0, 1234);
+        mutablePerson.arf = 7;
+        mutablePerson.arf = 8;
+        mutablePerson.dateOfBirth = [NSDate date];
+        mutablePerson.name = @"afsgdf";
+        mutablePerson.transform = CATransform3DMakeRotation(M_1_PI, 4, 8, 16);
+        mutablePerson.range = NSMakeRange(0, 1234);
 
-        [anotherPerson removeObserver:observer forKeyPath:@"name"];
-        [anotherPerson removeObserver:observer forKeyPath:@"dateOfBirth"];
-        [anotherPerson removeObserver:observer forKeyPath:@"arf"];
-        [anotherPerson removeObserver:observer forKeyPath:@"transform"];
-        [anotherPerson removeObserver:observer forKeyPath:@"range"];
+        BCVPerson *person = [[BCVPerson alloc] initWithKeysAndValues:
+            @"arf", @(mutablePerson.arf),
+            @"dateOfBirth", mutablePerson.dateOfBirth,
+            @"name", mutablePerson.name,
+            @"transform", [mutablePerson valueForKey:@"transform"],
+            @"range", [NSValue valueWithRange:NSMakeRange(0, 1234)],
+        nil];
+
+        NSLog(@"Equal objects: %i", [mutablePerson isEqual:person]);
+
+        [mutablePerson removeObserver:observer forKeyPath:@"name"];
+        [mutablePerson removeObserver:observer forKeyPath:@"dateOfBirth"];
+        [mutablePerson removeObserver:observer forKeyPath:@"arf"];
+        [mutablePerson removeObserver:observer forKeyPath:@"transform"];
+        [mutablePerson removeObserver:observer forKeyPath:@"range"];
     }
     return 0;
 }

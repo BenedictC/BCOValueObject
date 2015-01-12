@@ -257,18 +257,40 @@ static void BCOValueObjectIntializeMutableVariants() {
 
 
 #pragma mark - instance life cycle
--(instancetype)init
+-(instancetype)initWithKeysAndValues:(id)firstKey,...
 {
     self = [super init];
     if (self == nil) return nil;
 
-    _bvo_allowMutation = [self.class isMutableVariant];
+    _bvo_allowMutation = YES;
+
+    //Set the properties
+    va_list args;
+    va_start(args, firstKey);
+    id key = firstKey;
+    while (key != nil) {
+        id value = va_arg(args, id);
+        [self setValue:value forKey:key];
+        //Prep for next
+        key  = va_arg(args, id);
+    }
+    va_end(args);
+
+    //Freeze!
+     _bvo_allowMutation = [self.class isMutableVariant];
 
     if ([self.class isImmutableVariant]) {
         return [self.class canonicalImmutableInstance:self];
     }
 
     return self;
+}
+
+
+
+-(instancetype)init
+{
+    return [self initWithKeysAndValues:nil];
 }
 
 

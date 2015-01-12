@@ -31,6 +31,7 @@
 
 
 @interface BCOValueObject : NSObject <NSCopying, NSMutableCopying>
+-(instancetype)initWithKeysAndValues:(id)firstKey,... __attribute__((objc_designated_initializer));
 @end
 
 
