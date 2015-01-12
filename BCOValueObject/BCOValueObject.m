@@ -39,9 +39,14 @@ static void BCOValueObjectIntializeMutableVariants() {
 
 
 
+#pragma mark - Keys
+static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstancesCacheKey;
+
+
+
 @interface BCOValueObject () <NSCopying, NSMutableCopying>
-@property(readonly) NSUInteger bvo_hashValue;
-@property(nonatomic) BOOL bvo_allowMutation;
+@property(atomic) NSUInteger bvo_hashValue;
+@property(nonatomic) BOOL bvo_isImmutable;
 @end
 
 
@@ -60,23 +65,23 @@ static void BCOValueObjectIntializeMutableVariants() {
     if ([self isImmutableVariant]) {
 
         Class immutableClass = self;
-        enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property) {
+        enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
 
             //Assert that all properties are readonly.
-            BOOL isReadOnly = NO;
-            unsigned int count = 0;
-            objc_property_attribute_t *attribs = property_copyAttributeList(property, &count);
-            for (unsigned int i = 0; i < count; i++) {
-                objc_property_attribute_t attrib = attribs[i];
-
-                isReadOnly = (strcmp(attrib.name, "R") == 0);
-                if (isReadOnly) break;
-            }
-            free(attribs);
-
+            __block BOOL isReadOnly = NO;
+            enumerateAttributesOfProperty(property, ^(objc_property_attribute_t attribute, BOOL *stop) {
+                isReadOnly = (strcmp(attribute.name, "R") == 0);
+                *stop = isReadOnly;
+            });
             if (!isReadOnly) {
                 [NSException raise:NSInvalidArgumentException format:@"Invalid property for immutable variant of BVOObject. The property <%s> of class <%@> is not readonly.", property_getName(property), NSStringFromClass(immutableClass)];
                 return;
+            }
+
+            //Create the instance cache if instances are cachable
+            if ([self immutableInstanceHasStableHash]) {
+                NSMapTable *cache = [NSMapTable strongToWeakObjectsMapTable];
+                objc_setAssociatedObject(self, __cannonicalInstancesCacheKey, cache, OBJC_ASSOCIATION_RETAIN);
             }
         });
 
@@ -86,7 +91,7 @@ static void BCOValueObjectIntializeMutableVariants() {
         Class mutableClass = self;
 
         //Assert that no state is being added
-        enumeratePropertiesOfClass(mutableClass, ^(objc_property_t property) {
+        enumeratePropertiesOfClass(mutableClass, ^(objc_property_t property, BOOL *stop) {
             [NSException raise:NSInvalidArgumentException format:@"Mutable subclass adds state thus preventing copying between mutable and immutable variants"];
             return;
         });
@@ -119,7 +124,7 @@ static void BCOValueObjectIntializeMutableVariants() {
 }
 
 #define TYPE_MATCHES_ENCODED_TYPE(TYPE, ENCODED_TYPE) (0 == strcmp(@encode(TYPE), ENCODED_TYPE))
-        enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property) {
+        enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
             SEL setterSelector = setterSelectorForProperty(property); \
             BOOL shouldAddSetter = ![mutableClass instancesRespondToSelector:setterSelector];
             if (!shouldAddSetter) return;
@@ -262,8 +267,6 @@ static void BCOValueObjectIntializeMutableVariants() {
     self = [super init];
     if (self == nil) return nil;
 
-    _bvo_allowMutation = YES;
-
     //Set the properties
     va_list args;
     va_start(args, firstKey);
@@ -277,7 +280,7 @@ static void BCOValueObjectIntializeMutableVariants() {
     va_end(args);
 
     //Freeze!
-     _bvo_allowMutation = [self.class isMutableVariant];
+     _bvo_isImmutable = [self.class isMutableVariant];
 
     if ([self.class isImmutableVariant]) {
         return [self.class canonicalImmutableInstance:self];
@@ -295,22 +298,31 @@ static void BCOValueObjectIntializeMutableVariants() {
 
 
 
++(BOOL)immutableInstanceHasStableHash
+{
+    //If there are weak properties then the hash will change
+    __block BOOL hasWeakProperty = NO;
+    enumeratePropertiesOfClass(self.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        enumerateAttributesOfProperty(property, ^(objc_property_attribute_t attrib, BOOL *stop) {
+            if (strcmp(attrib.name, "W") == 0) hasWeakProperty = YES;
+            *stop = hasWeakProperty;
+        });
+        *stop = hasWeakProperty;
+    });
+    return !hasWeakProperty;
+}
+
+
+
 +(instancetype)canonicalImmutableInstance:(id)referenceInstance
 {
     NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
 
     @synchronized(self.immutableClass) {
-        //Fetch/create the cache
-        //I feel conflicted about using associated objects to do this. It is perfectly possible to achieve the same
-        //result without relying on runtime.h (which should be considered a last resort) but in this case using
-        //associated objects results in more succient code that is thus less error prone.
-        static const void * const key = &key;
-        NSMapTable *cache = objc_getAssociatedObject(self, key) ?: ({
-            cache = [NSMapTable strongToWeakObjectsMapTable];
-            objc_setAssociatedObject(self, key, cache, OBJC_ASSOCIATION_RETAIN);
-            cache;
-        });
+        //Fetch the cache (this will be nil if the hash is not stable)
+        NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
+        if (cache == nil) return referenceInstance;
 
         //Check the cache
         NSNumber *hash = @([referenceInstance hash]);
@@ -330,13 +342,19 @@ static void BCOValueObjectIntializeMutableVariants() {
 #pragma mark - Equality
 -(NSUInteger)hash
 {
-    //Because immutable and mutable variants should compare as equal we use the immutable classes has as the seed for the hash.
-    //This isn't really needed because we do an explict class check in isEqual:.
-    __block NSUInteger hash = ~[self.class.immutableClass hash];
+    //If the hash is cached then we're done.
+    if (self.bvo_hashValue != 0)  return self.bvo_hashValue;
+
+    Class class = self.class;
+    Class immutableClass = class.immutableClass;
+
+    //We start with the hash of the class so that a class will always have a non-zero hash value
+    //Because immutable and mutable variants should compare as equal we use the immutable classes hash as the seed for the hash.
+    __block NSUInteger hash = ~[immutableClass hash];
 
     //Enumerate each property of the immutable class and incorporate its' values hash into our hash.
     //We only check the immutable class because subclasses are not supposed to add properties.
-    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property) {
+    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         const char *name = property_getName(property);
         id value = [self valueForKey:@(name)];
 
@@ -344,7 +362,10 @@ static void BCOValueObjectIntializeMutableVariants() {
         hash ^= [value hash];
     });
 
-#pragma message "TODO: Cache this value if it's an immutable instance and there's no other reason not to."
+    BOOL isHashCachable = [class isImmutableVariant] && [immutableClass immutableInstanceHasStableHash];
+    if (isHashCachable) {
+        self.bvo_hashValue = hash;
+    }
 
     return hash;
 }
@@ -363,7 +384,7 @@ static void BCOValueObjectIntializeMutableVariants() {
 #pragma mark - KVO
 -(void)setValue:(id)value forKey:(NSString *)key
 {
-    if (!self.bvo_allowMutation) {
+    if (!self.bvo_isImmutable) {
         [NSException raise:NSInvalidArgumentException format:@"Attempted to set a value of an immutable object."];
         return;
     }
@@ -398,15 +419,16 @@ static void BCOValueObjectIntializeMutableVariants() {
 {
     Class immutableClass = [self.class immutableClass];
     BCOValueObject *instance = [immutableClass new];
-    instance.bvo_allowMutation = YES;
 
-    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property) {
+    instance.bvo_isImmutable = NO;
+
+    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = [self valueForKey:key];
         [instance setValue:value forKey:key];
     });
 
-    instance.bvo_allowMutation = NO;
+    instance.bvo_isImmutable = YES;
 
     if ([self.class isImmutableVariant]) {
         return [immutableClass canonicalImmutableInstance:instance];
@@ -429,10 +451,9 @@ static void BCOValueObjectIntializeMutableVariants() {
     }
 
     BCOValueObject *instance = [mutableClass new];
-    instance.bvo_allowMutation = YES;
 
     Class immutableClass = [self.class immutableClass];
-    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property) {
+    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = [self valueForKey:key];
         [instance setValue:value forKey:key];

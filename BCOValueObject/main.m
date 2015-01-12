@@ -53,7 +53,7 @@ int main(int argc, const char * argv[]) {
         mutablePerson.range = NSMakeRange(0, 1234);
 
         BCVPerson *person = [[BCVPerson alloc] initWithKeysAndValues:
-            @"arf", @(mutablePerson.arf),
+            @"arf", 6, //@(mutablePerson.arf),
             @"dateOfBirth", mutablePerson.dateOfBirth,
             @"name", mutablePerson.name,
             @"transform", [mutablePerson valueForKey:@"transform"],
