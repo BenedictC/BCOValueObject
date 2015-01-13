@@ -276,11 +276,8 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     //Freeze!
     _bvo_isImmutable = [self.class isMutableVariant];
 
-    if ([self.class isImmutableVariant]) {
-        return [self.class canonicalImmutableInstance:self];
-    }
-
-    return self;
+    BOOL shouldReturnCanonicalInstance = [self.class isImmutableVariant];
+    return (shouldReturnCanonicalInstance) ? [self.class canonicalImmutableInstance:self] : self;
 }
 
 
@@ -313,7 +310,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 -(instancetype)init
 {
-    return [self initWithKeysAndValues:nil];
+    return [self initWithValues:nil];
 }
 
 
