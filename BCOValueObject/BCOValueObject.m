@@ -434,6 +434,8 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - copying
 -(id)copyWithZone:(NSZone *)zone
 {
+    if ([self.class isImmutableVariant]) return self;
+
     Class immutableClass = [self.class immutableClass];
     BCOValueObject *instance = [immutableClass new];
 
