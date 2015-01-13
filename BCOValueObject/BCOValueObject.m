@@ -39,7 +39,8 @@ static void BCOValueObjectIntializeMutableVariants() {
 
 
 
-#pragma mark - Keys
+#pragma mark - Associated objects keys
+static const void * const __cannonicalInstancesQueueKey = &__cannonicalInstancesQueueKey;
 static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstancesCacheKey;
 
 
@@ -77,6 +78,11 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
                 [NSException raise:NSInvalidArgumentException format:@"Invalid property for immutable variant of BVOObject. The property <%s> of class <%@> is not readonly.", property_getName(property), NSStringFromClass(immutableClass)];
                 return;
             }
+
+            //Create a queue for creating canonical instances
+            const char *queueLabel = [@"BCOValueObject.canonicalInstance." stringByAppendingString:NSStringFromClass(immutableClass)].UTF8String;
+            dispatch_queue_t queue = dispatch_queue_create(queueLabel, DISPATCH_QUEUE_CONCURRENT);
+            objc_setAssociatedObject(self, __cannonicalInstancesCacheKey, queue, OBJC_ASSOCIATION_RETAIN);
 
             //Create the instance cache if instances are cachable
             if ([self immutableInstanceHasStableHash]) {
@@ -336,22 +342,31 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
 
-    @synchronized(self.immutableClass) {
-        //Fetch the cache (this will be nil if the hash is not stable)
-        NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
-        if (cache == nil) return referenceInstance;
+    dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+    NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
 
-        //Check the cache
-        NSNumber *hash = @([referenceInstance hash]);
-        id canonicalInstance = [cache objectForKey:hash];
+    //If the cache is nil then instance cannot be cached
+    if (cache == nil) return referenceInstance;
 
-        BOOL hasCanonicalInstance = canonicalInstance != nil;
-        if (hasCanonicalInstance) return canonicalInstance;
+    NSNumber *hash = @([referenceInstance hash]);
+    __block id canonicalInstance = nil;
+    dispatch_sync(queue, ^{
+        canonicalInstance = [cache objectForKey:hash];
+    });
+
+    if (canonicalInstance != nil) return canonicalInstance;
+
+    dispatch_barrier_sync(queue, ^{
+        //We have to check again because another write may have occured since we read.
+        canonicalInstance = [cache objectForKey:hash];
+        if (canonicalInstance != nil) return;
 
         //Update the cache
         [cache setObject:referenceInstance forKey:hash];
-        return referenceInstance;
-    }
+        canonicalInstance = referenceInstance;
+    });
+
+    return canonicalInstance;
 }
 
 
