@@ -262,31 +262,51 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 #pragma mark - instance life cycle
--(instancetype)initWithKeysAndValues:(id)firstKey,...
+-(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName
 {
     self = [super init];
     if (self == nil) return nil;
 
-    //Set the properties
-    va_list args;
-    va_start(args, firstKey);
-    id key = firstKey;
-    while (key != nil) {
-        id value = va_arg(args, id);
+    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *key = @(property_getName(property));
+        id value = valuesByPropertyName[key];
         [self setValue:value forKey:key];
-        //Prep for next
-        key  = va_arg(args, id);
-    }
-    va_end(args);
+    });
 
     //Freeze!
-     _bvo_isImmutable = [self.class isMutableVariant];
+    _bvo_isImmutable = [self.class isMutableVariant];
 
     if ([self.class isImmutableVariant]) {
         return [self.class canonicalImmutableInstance:self];
     }
 
     return self;
+}
+
+
+
+-(instancetype)initWithKeysAndValues:(id)firstKey,...
+{
+    NSMutableDictionary *values = [NSMutableDictionary new];
+
+    //Convert the va args into a dictionary
+    va_list args;
+    va_start(args, firstKey);
+    id key = firstKey;
+    while (key != nil) {
+        id value = va_arg(args, id);
+
+        if (value != nil) {
+            [values setObject:value forKey:key];
+        }
+
+        //Prep for next
+        key  = va_arg(args, id);
+    }
+    va_end(args);
+
+
+    return [self initWithValues:values];
 }
 
 
