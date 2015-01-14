@@ -27,12 +27,30 @@
       BCOValueObject overrides setValue:forKey: so that it will not cause an infinte loop when being called from within a setter providing that the class hierarchy requirements listed above are adhered to.
   - Mutable variants must be registed so that immutable variant can make mutable copies. The simplest way to do this is to call BCO_VALUE_OBJECT_REGISTER_MUTABLE_VARIANT from the header file where the mutable variant is declared.
  */
-
-
-
 @interface BCOValueObject : NSObject <NSCopying, NSMutableCopying>
+/**
+ Subclasses should override this method if there hash value may change once the object is created. The default implementation is returns YES unless the object contains a property that is use weak storage. If this method returns NO then uniquing and hash caching are not performed.
+
+ @return YES if the hash value of instances will not change once created.
+ */
++(BOOL)immutableInstanceHasStableHash;
+
+/**
+ Initalize an instance using the values in valuesByPropertyName. The keys of valuesByPropertyName should be the name property name. Keys which do not relate to the a property name are ignored.
+
+ @param valuesByPropertyName An NSDictionary where keys are property names and values are the property's value.
+
+ @return an initalized instance.
+ */
 -(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName __attribute__((objc_designated_initializer));
--(instancetype)initWithKeysAndValues:(id)firstKey,...;
+/**
+ Initalized an instance using the value
+
+ @param firstKey A list of alternating keys and values. keys must be NSString instances and values must be objects or nil. The list is terminated by a nil in a key position. Due to the fact that this method can accept nil values it may be prefereable to initWithValues:.
+
+ @return an initalized instance.
+ */
+-(instancetype)initWithKeysAndValues:(id)keysAndValues,...;
 @end
 
 
