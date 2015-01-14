@@ -82,7 +82,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             //Create a queue for creating canonical instances
             const char *queueLabel = [@"BCOValueObject.canonicalInstance." stringByAppendingString:NSStringFromClass(immutableClass)].UTF8String;
             dispatch_queue_t queue = dispatch_queue_create(queueLabel, DISPATCH_QUEUE_CONCURRENT);
-            objc_setAssociatedObject(self, __cannonicalInstancesCacheKey, queue, OBJC_ASSOCIATION_RETAIN);
+            objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, queue, OBJC_ASSOCIATION_RETAIN);
 
             //Create the instance cache if instances are cachable
             if ([self immutableInstanceHasStableHash]) {
@@ -91,15 +91,17 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             }
         });
 
-    } else if ([self isMutableVariant]) {
+        return;
+    }
 
+    //Assert that no state is being added after ontop of the immutable variant
+    enumeratePropertiesOfClass(self, ^(objc_property_t property, BOOL *stop) {
+        [NSException raise:NSInvalidArgumentException format:@"Mutable subclass adds state thus preventing copying between mutable and immutable variants"];
+    });
+
+    if ([self isMutableVariant]) {
         Class immutableClass = self.immutableClass;
         Class mutableClass = self;
-
-        //Assert that no state is being added
-        enumeratePropertiesOfClass(mutableClass, ^(objc_property_t property, BOOL *stop) {
-            [NSException raise:NSInvalidArgumentException format:@"Mutable subclass adds state thus preventing copying between mutable and immutable variants"];
-        });
 
         //Add a setter for each property
         enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
@@ -109,12 +111,13 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             }
         });
 
-        //Finally register the mutable variant
+        //Register the mutable variant
         [self setMutableClass:self forImmutableClass:self.immutableClass];
 
-    } else {
-        //Possibly an invalid class hierarchy but we can't do anything because it *may* be a legitmate class, eg a KVO subclass.
+        return;
     }
+
+    //Possibly an invalid class hierarchy but we can't do anything because it *may* be a legitmate class, eg a KVO subclass.
 }
 
 
@@ -210,11 +213,15 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = valuesByPropertyName[key];
+
+        BOOL isIgnorableValue = (value == nil);
+        if (isIgnorableValue) return;
+
         [self setValue:value forKey:key];
     });
 
     //Freeze!
-    _bvo_isImmutable = [self.class isMutableVariant];
+    _bvo_isImmutable = [self.class isImmutableVariant];
 
     BOOL shouldReturnCanonicalInstance = [self.class isImmutableVariant];
     return (shouldReturnCanonicalInstance) ? [self.class canonicalImmutableInstance:self] : self;
@@ -350,7 +357,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - KVO
 -(void)setValue:(id)value forKey:(NSString *)key
 {
-    if (!self.bvo_isImmutable) {
+    if (self.bvo_isImmutable) {
         [NSException raise:NSInvalidArgumentException format:@"Attempted to set a value of an immutable object."];
         return;
     }
