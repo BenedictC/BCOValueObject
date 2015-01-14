@@ -99,81 +99,15 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         //Assert that no state is being added
         enumeratePropertiesOfClass(mutableClass, ^(objc_property_t property, BOOL *stop) {
             [NSException raise:NSInvalidArgumentException format:@"Mutable subclass adds state thus preventing copying between mutable and immutable variants"];
-            return;
         });
 
         //Add a setter for each property
-#define ADD_SETTER_FOR_NSVALUE_TYPE(TYPE)  \
-{\
-    IMP setterImp = ({ \
-        NSString *name = @(property_getName(property)); \
-        imp_implementationWithBlock(^void(id instance, TYPE rawValue) {\
-            NSValue *value = [NSNumber valueWithBytes:&rawValue objCType:@encode(TYPE)]; \
-            [instance setValue:value forKey:name]; \
-        });\
-    }); \
-    const char *types = [[NSString stringWithFormat:@"v@:%s", @encode(TYPE)] UTF8String]; \
-    class_addMethod(mutableClass, setterSelector, setterImp, types); \
-}
-
-#define ADD_SETTER_FOR_NSNUMBER_TYPE(TYPE)  \
-{\
-    IMP setterImp = ({ \
-        NSString *name = @(property_getName(property)); \
-        imp_implementationWithBlock(^void(id instance, TYPE rawValue) {\
-            NSNumber *value = @(rawValue); \
-            [instance setValue:value forKey:name]; \
-        });\
-    }); \
-    const char *types = [[NSString stringWithFormat:@"v@:%s", @encode(TYPE)] UTF8String]; \
-    class_addMethod(mutableClass, setterSelector, setterImp, types); \
-}
-
-#define TYPE_MATCHES_ENCODED_TYPE(TYPE, ENCODED_TYPE) (0 == strcmp(@encode(TYPE), ENCODED_TYPE))
         enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
-            SEL setterSelector = setterSelectorForProperty(property); \
-            BOOL shouldAddSetter = ![mutableClass instancesRespondToSelector:setterSelector];
-            if (!shouldAddSetter) return;
-
-            SEL getterSelector = getterSelectorForProperty(property);
-            NSMethodSignature *getterSig = [immutableClass instanceMethodSignatureForSelector:getterSelector];
-            const char *returnType = getterSig.methodReturnType;
-            BOOL isObject = [@(returnType) hasPrefix:@"@"];
-            if (isObject) {
-                IMP setterImp = ({
-                    NSString *name = @(property_getName(property));
-                    imp_implementationWithBlock(^void(id instance, id value) {
-                        [instance setValue:value forKey:name];
-                    });
-                });
-                const char *types = [[NSString stringWithFormat:@"v@:%s", @encode(id)] UTF8String];
-                class_addMethod(mutableClass, setterSelector, setterImp, types);
-            }
-            else if (TYPE_MATCHES_ENCODED_TYPE(BOOL, returnType))      ADD_SETTER_FOR_NSNUMBER_TYPE(BOOL)
-            else if (TYPE_MATCHES_ENCODED_TYPE(char, returnType))      ADD_SETTER_FOR_NSNUMBER_TYPE(char)
-            else if (TYPE_MATCHES_ENCODED_TYPE(short, returnType))     ADD_SETTER_FOR_NSNUMBER_TYPE(short)
-            else if (TYPE_MATCHES_ENCODED_TYPE(int, returnType))       ADD_SETTER_FOR_NSNUMBER_TYPE(int)
-            else if (TYPE_MATCHES_ENCODED_TYPE(long, returnType))      ADD_SETTER_FOR_NSNUMBER_TYPE(long)
-            else if (TYPE_MATCHES_ENCODED_TYPE(long long, returnType)) ADD_SETTER_FOR_NSNUMBER_TYPE(long long)
-            else if (TYPE_MATCHES_ENCODED_TYPE(float, returnType))     ADD_SETTER_FOR_NSNUMBER_TYPE(float)
-            else if (TYPE_MATCHES_ENCODED_TYPE(double, returnType))    ADD_SETTER_FOR_NSNUMBER_TYPE(double)
-
-#pragma message "TODO: Add all types in the main frameworks"
-            else if (TYPE_MATCHES_ENCODED_TYPE(NSRange, returnType))   ADD_SETTER_FOR_NSVALUE_TYPE(NSRange)
-            else if (TYPE_MATCHES_ENCODED_TYPE(NSSize, returnType))    ADD_SETTER_FOR_NSVALUE_TYPE(NSSize)
-            else if (TYPE_MATCHES_ENCODED_TYPE(NSPoint, returnType))   ADD_SETTER_FOR_NSVALUE_TYPE(NSPoint)
-            else if (TYPE_MATCHES_ENCODED_TYPE(NSRect, returnType))    ADD_SETTER_FOR_NSVALUE_TYPE(NSRect)
-            else if (TYPE_MATCHES_ENCODED_TYPE(CGSize, returnType))    ADD_SETTER_FOR_NSVALUE_TYPE(CGSize)
-            else if (TYPE_MATCHES_ENCODED_TYPE(CGPoint, returnType))   ADD_SETTER_FOR_NSVALUE_TYPE(CGPoint)
-            else if (TYPE_MATCHES_ENCODED_TYPE(CGRect, returnType))    ADD_SETTER_FOR_NSVALUE_TYPE(CGRect)
-            else {
+            BOOL didSucceed = addSetterToClassForPropertyFromClass(mutableClass, property, immutableClass);
+            if (!didSucceed) {
                 [NSException raise:NSInvalidArgumentException format:@"Unable to add setter for property <%s> of class <%@>. A setter must be added manually.", property_getName(property), NSStringFromClass(mutableClass)];
-                return;
             }
         });
-#undef TYPE_MATCHES_ENCODED_TYPE
-#undef ADD_SETTER_FOR_NSNUMBER_TYPE
-#undef ADD_SETTER_FOR_NSVALUE_TYPE
 
         //Finally register the mutable variant
         [self setMutableClass:self forImmutableClass:self.immutableClass];

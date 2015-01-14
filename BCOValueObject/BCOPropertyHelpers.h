@@ -96,4 +96,62 @@ static SEL getterSelectorForProperty(objc_property_t property) {
     return NSSelectorFromString(name);
 }
 
+
+
+static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_property_t property, Class immutableClass) {
+#define ADD_SETTER_FOR_TYPE(TYPE, OBJECT_GENERATOR)  \
+{\
+    IMP setterImp = ({ \
+        NSString *name = @(property_getName(property)); \
+        imp_implementationWithBlock(^void(id instance, TYPE rawValue) {\
+        id value = (OBJECT_GENERATOR); \
+        [instance setValue:value forKey:name]; \
+    });\
+}); \
+const char *types = [[NSString stringWithFormat:@"v@:%s", @encode(TYPE)] UTF8String]; \
+class_addMethod(mutableClass, setterSelector, setterImp, types); \
+}
+
+#define ADD_SETTER_FOR_OBJECT_TYPE(TYPE) ADD_SETTER_FOR_TYPE(TYPE, {rawValue;})
+#define ADD_SETTER_FOR_NSVALUE_TYPE(TYPE) ADD_SETTER_FOR_TYPE(TYPE, {[NSValue valueWithBytes:&rawValue objCType:@encode(TYPE)];})
+#define ADD_SETTER_FOR_NSNUMBER_TYPE(TYPE) ADD_SETTER_FOR_TYPE(TYPE, {@(rawValue);})
+
+#define TYPE_MATCHES_ENCODED_TYPE(TYPE, ENCODED_TYPE) (0 == strcmp(@encode(TYPE), ENCODED_TYPE))
+
+    SEL setterSelector = setterSelectorForProperty(property); \
+    BOOL shouldAddSetter = ![mutableClass instancesRespondToSelector:setterSelector];
+    if (!shouldAddSetter) return YES;
+
+    SEL getterSelector = getterSelectorForProperty(property);
+    NSMethodSignature *getterSig = [immutableClass instanceMethodSignatureForSelector:getterSelector];
+    const char *returnType = getterSig.methodReturnType;
+    BOOL isObject = [@(returnType) hasPrefix:@"@"];
+    if      (isObject)                                         {ADD_SETTER_FOR_OBJECT_TYPE(id)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(BOOL, returnType))      {ADD_SETTER_FOR_NSNUMBER_TYPE(BOOL)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(char, returnType))      {ADD_SETTER_FOR_NSNUMBER_TYPE(char)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(short, returnType))     {ADD_SETTER_FOR_NSNUMBER_TYPE(short)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(int, returnType))       {ADD_SETTER_FOR_NSNUMBER_TYPE(int)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(long, returnType))      {ADD_SETTER_FOR_NSNUMBER_TYPE(long)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(long long, returnType)) {ADD_SETTER_FOR_NSNUMBER_TYPE(long long)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(float, returnType))     {ADD_SETTER_FOR_NSNUMBER_TYPE(float)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(double, returnType))    {ADD_SETTER_FOR_NSNUMBER_TYPE(double)}
+
+#pragma message "TODO: Add all types in the main frameworks"
+    else if (TYPE_MATCHES_ENCODED_TYPE(NSRange, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(NSRange)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(NSSize, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSSize)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(NSPoint, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(NSPoint)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(NSRect, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSRect)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(CGSize, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(CGSize)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(CGPoint, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(CGPoint)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(CGRect, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(CGRect)}
+    else return NO;
+
+    return YES;
+#undef ADD_SETTER_FOR_TYPE
+#undef ADD_SETTER_FOR_OBJECT_TYPE
+#undef ADD_SETTER_FOR_NSNUMBER_TYPE
+#undef ADD_SETTER_FOR_NSVALUE_TYPE
+#undef TYPE_MATCHES_ENCODED_TYPE
+}
+
 #endif
