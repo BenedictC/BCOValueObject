@@ -45,15 +45,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		823C1A4B1A632F3B00A2224F /* BCOValueObject */ = {
+		823B63171A66BF4100F20E59 /* demo */ = {
 			isa = PBXGroup;
 			children = (
-				823C1A4C1A632F3B00A2224F /* BCOPropertyHelpers.h */,
-				823C1A4D1A632F3B00A2224F /* BCOValueObject.h */,
-				823C1A4E1A632F3B00A2224F /* BCOValueObject.m */,
 				823C1A4F1A632F3B00A2224F /* BCVPerson.h */,
 				823C1A501A632F3B00A2224F /* BCVPerson.m */,
 				823C1A511A632F3B00A2224F /* main.m */,
+			);
+			name = demo;
+			sourceTree = "<group>";
+		};
+		823C1A4B1A632F3B00A2224F /* BCOValueObject */ = {
+			isa = PBXGroup;
+			children = (
+				823C1A4D1A632F3B00A2224F /* BCOValueObject.h */,
+				823C1A4E1A632F3B00A2224F /* BCOValueObject.m */,
+				823C1A4C1A632F3B00A2224F /* BCOPropertyHelpers.h */,
+				823B63171A66BF4100F20E59 /* demo */,
 			);
 			path = BCOValueObject;
 			sourceTree = "<group>";
