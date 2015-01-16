@@ -138,9 +138,9 @@ class_addMethod(mutableClass, setterSelector, setterImp, types); \
 
 #pragma message "TODO: Add all types in the main frameworks"
     else if (TYPE_MATCHES_ENCODED_TYPE(NSRange, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(NSRange)}
-    else if (TYPE_MATCHES_ENCODED_TYPE(NSSize, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSSize)}
-    else if (TYPE_MATCHES_ENCODED_TYPE(NSPoint, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(NSPoint)}
-    else if (TYPE_MATCHES_ENCODED_TYPE(NSRect, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSRect)}
+//    else if (TYPE_MATCHES_ENCODED_TYPE(NSSize, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSSize)}
+//    else if (TYPE_MATCHES_ENCODED_TYPE(NSPoint, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(NSPoint)}
+//    else if (TYPE_MATCHES_ENCODED_TYPE(NSRect, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(NSRect)}
     else if (TYPE_MATCHES_ENCODED_TYPE(CGSize, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(CGSize)}
     else if (TYPE_MATCHES_ENCODED_TYPE(CGPoint, returnType))   {ADD_SETTER_FOR_NSVALUE_TYPE(CGPoint)}
     else if (TYPE_MATCHES_ENCODED_TYPE(CGRect, returnType))    {ADD_SETTER_FOR_NSVALUE_TYPE(CGRect)}
