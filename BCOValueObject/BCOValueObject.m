@@ -312,6 +312,23 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
+#pragma mark - debug
+-(NSString *)description
+{
+    NSMutableString *values = [NSMutableString new];
+    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *name = @(property_getName(property));
+        id value = [self valueForKey:name];
+        [values appendFormat:@"%@ = %@;\n", name, value];
+    });
+
+    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n %@})", NSStringFromClass(self.class), self, values];
+
+    return description;
+}
+
+
+
 #pragma mark - Equality
 -(NSUInteger)hash
 {
