@@ -82,7 +82,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             //Create a queue for creating canonical instances
             const char *queueLabel = [@"BCOValueObject.canonicalInstance." stringByAppendingString:NSStringFromClass(immutableClass)].UTF8String;
             dispatch_queue_t queue = dispatch_queue_create(queueLabel, DISPATCH_QUEUE_CONCURRENT);
-            objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, queue, OBJC_ASSOCIATION_RETAIN);
+            objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, (__bridge id)(queue), OBJC_ASSOCIATION_RETAIN);
 
             //Create the instance cache if instances are cachable
             if ([self immutableInstanceHasStableHash]) {
@@ -283,7 +283,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
 
-    dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+    dispatch_queue_t queue = (__bridge dispatch_queue_t)objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
     NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
 
     //If the cache is nil then instance cannot be cached
@@ -308,6 +308,23 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     });
 
     return canonicalInstance;
+}
+
+
+
+#pragma mark - debug
+-(NSString *)description
+{
+    NSMutableString *values = [NSMutableString new];
+    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *name = @(property_getName(property));
+        id value = [self valueForKey:name];
+        [values appendFormat:@"%@ = %@;\n", name, value];
+    });
+
+    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n %@})", NSStringFromClass(self.class), self, values];
+
+    return description;
 }
 
 
