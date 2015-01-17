@@ -19,16 +19,15 @@
  - Immutable variants may be subclassed to create 'mutable variants'. Mutable variants have the following restrictions:
     - Mutable variants must not add properties (direct ivars can be added but this is strongly discouraged).
     - Mutable variants should not be subclassed.
-    - Mutable variants should declare setter methods in an named category (these methods will be dynamically added at runtime by BVOObject.)
-    - Setter declarations for mutable variants must be listed in a category. Setters will be automatically generated for most types. If a setter cannot be generated then an exception will be raised when the class is initalized. Setters which cannot be generated must be implemented as like so:
+    - Setter declarations for mutable variants must be listed in a category. Implementations for setters will be automatically generated for most types. If a setter cannot be generated then an exception will be raised when the class is initalized. Setters which cannot be generated must be implemented like so:
         -(void)setTransform:(CATransform3D)transform
         {
             [self setValue:[NSValue valueWithCATransform3D:transform] forKey:@"transform"];
         }
       BCOValueObject overrides setValue:forKey: so that it will not cause an infinte loop when being called from within a setter providing that the class hierarchy requirements listed above are adhered to.
-  - Mutable variants must be registed so that immutable variant can make mutable copies. The simplest way to do this is to call BCO_VALUE_OBJECT_REGISTER_MUTABLE_VARIANT from the header file where the mutable variant is declared.
+  - Mutable variants must be registered so that immutable variant can make mutable copies. The simplest way to do this is to call BCO_VALUE_OBJECT_REGISTER_MUTABLE_VARIANT from within the header file where the mutable variant is declared.
  
- Due to the restrictions on subclassing polymorphism can be achieved by using protocols.
+ Due to the subclassing restrictions protocols should be used to implement polymorphism.
 
  */
 @interface BCOValueObject : NSObject <NSCopying, NSMutableCopying>
