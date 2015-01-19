@@ -98,15 +98,53 @@ static SEL getterSelectorForProperty(objc_property_t property) {
 
 
 
+//# The structs where found using the following Ruby script:
+//
+// #!/usr/bin/ruby
+//
+// paths = Array.new
+//
+// #OS X
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/System/Library/Frameworks/Foundation.framework/Headers/*.h')
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/System/Library/Frameworks/AppKit.framework/Headers/*.h')
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/*.h')
+//
+// #iOS
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk/System/Library/Frameworks/Foundation.framework/Headers/*.h')
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk/System/Library/Frameworks/UIKit.framework/Headers/*.h')
+// paths.push('/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/*.h')
+//
+//
+// paths.each do |path|
+//
+//    sdk = path.scan(/([a-zA-Z0-9\.]*)\.sdk/)[0][0]
+//    framework = path.scan(/([a-zA-Z0-9]*)\.frame/)[0][0]
+//    title = sdk + ': ' + framework
+//    puts title
+//    puts '-' * title.length #Ruby is lolz
+//
+//	Dir[path].each do |filename|
+//        s = IO.read(filename)
+//        regex = /typedef\s+struct\s+[_A-Za-z0-9]*(?:\s*\{[\s\S]*?\})?\s([a-zA-Z][a-zA-Z0-9_]*);/
+//        matches = s.scan(regex)
+//        if matches
+//            puts matches
+//        end
+//	end
+//    puts '
+// '
+// end
+
+
 
 #define ADD_SETTER_FOR_TYPE(TYPE, OBJECT_GENERATOR)  \
 {\
-    IMP setterImp = ({ \
-        NSString *name = @(property_getName(property)); \
-        imp_implementationWithBlock(^void(id instance, TYPE rawValue) {\
-        id value = (OBJECT_GENERATOR); \
-        [instance setValue:value forKey:name]; \
-    });\
+IMP setterImp = ({ \
+NSString *name = @(property_getName(property)); \
+imp_implementationWithBlock(^void(id instance, TYPE rawValue) {\
+id value = (OBJECT_GENERATOR); \
+[instance setValue:value forKey:name]; \
+});\
 }); \
 const char *types = [[NSString stringWithFormat:@"v@:%s", @encode(TYPE)] UTF8String]; \
 class_addMethod(mutableClass, setterSelector, setterImp, types); \
@@ -143,20 +181,20 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     else if (TYPE_MATCHES_ENCODED_TYPE(double, returnType))    {ADD_SETTER_FOR_NSNUMBER_TYPE(double)}
 
     //Structs
-#if TARGET_OS_MAC
-//MacOSX10.10: Foundation
-//-----------------------
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1000
+    //MacOSX10.10: Foundation
+    //-----------------------
     ELSE_IF_MATCHES_STRUCT(NSAffineTransformStruct, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSwappedFloat, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSwappedDouble, returnType)
     ELSE_IF_MATCHES_STRUCT(NSDecimal, returnType)
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     ELSE_IF_MATCHES_STRUCT(NSFastEnumerationState, returnType) //10.5
 #endif
     ELSE_IF_MATCHES_STRUCT(NSPoint, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSize, returnType)
     ELSE_IF_MATCHES_STRUCT(NSRect, returnType)
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
     ELSE_IF_MATCHES_STRUCT(NSEdgeInsets, returnType) //10.7
 #endif
     ELSE_IF_MATCHES_STRUCT(NSHashEnumerator, returnType)
@@ -166,17 +204,17 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     ELSE_IF_MATCHES_STRUCT(NSMapTableValueCallBacks, returnType)
     ELSE_IF_MATCHES_STRUCT(NSOperatingSystemVersion, returnType)
     ELSE_IF_MATCHES_STRUCT(NSRange, returnType)
-//    ELSE_IF_MATCHES_STRUCT(NSZone, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSZone, returnType)
 
-//MacOSX10.10: AppKit
-//-------------------
-//    ELSE_IF_MATCHES_STRUCT(NSEdgeInsets, returnType)
-//    ELSE_IF_MATCHES_STRUCT(NSOpenGLContextAuxiliary, returnType)
-//    ELSE_IF_MATCHES_STRUCT(NSScreenAuxiliaryOpaque, returnType)
-//    ELSE_IF_MATCHES_STRUCT(NSTypesetterGlyphInfo, returnType)
+    //MacOSX10.10: AppKit
+    //-------------------
+    //    ELSE_IF_MATCHES_STRUCT(NSEdgeInsets, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSOpenGLContextAuxiliary, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSScreenAuxiliaryOpaque, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSTypesetterGlyphInfo, returnType)
 
-//MacOSX10.10: CoreGraphics
-//-------------------------
+    //MacOSX10.10: CoreGraphics
+    //-------------------------
     ELSE_IF_MATCHES_STRUCT(CGAffineTransform, returnType)
     ELSE_IF_MATCHES_STRUCT(CGDataConsumerCallbacks, returnType)
     ELSE_IF_MATCHES_STRUCT(CGPoint, returnType)
@@ -190,47 +228,54 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     ELSE_IF_MATCHES_STRUCT(CGScreenUpdateMoveDelta, returnType) //10.3
     ELSE_IF_MATCHES_STRUCT(CGEventTapInformation, returnType) //10.4
 
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     ELSE_IF_MATCHES_STRUCT(CGDataProviderDirectCallbacks, returnType) //10.5
 #endif
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1090
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     ELSE_IF_MATCHES_STRUCT(CGVector, returnType) ///10.9
 #endif
-//    ELSE_IF_MATCHES_STRUCT(CGDeviceColor, returnType) //???    
+    //    ELSE_IF_MATCHES_STRUCT(CGDeviceColor, returnType) //???
 #endif
 
-#if TARGET_OS_IPHONE
-//iPhoneOS8.1: Foundation
-//-----------------------
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 20000
+    //iPhoneOS8.1: Foundation
+    //-----------------------
     ELSE_IF_MATCHES_STRUCT(NSSwappedFloat, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSwappedDouble, returnType)
     ELSE_IF_MATCHES_STRUCT(NSDecimal, returnType)
     ELSE_IF_MATCHES_STRUCT(NSFastEnumerationState, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSHashEnumerator, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSHashTableCallBacks, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSMapEnumerator, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSMapTableKeyCallBacks, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSMapTableValueCallBacks, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSHashEnumerator, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSHashTableCallBacks, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSMapEnumerator, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSMapTableKeyCallBacks, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSMapTableValueCallBacks, returnType)
+
+    //The version number is wrong in iOS 8.1 (it's 70100) so NSOperatingSystemVersion won't be available until Apple after 8.1. D'oh!
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 80000
     ELSE_IF_MATCHES_STRUCT(NSOperatingSystemVersion, returnType)
+#endif
+
     ELSE_IF_MATCHES_STRUCT(NSRange, returnType)
-    ELSE_IF_MATCHES_STRUCT(NSZone, returnType)
-    ELSE_IF_MATCHES_STRUCT(, returnType)
+    //    ELSE_IF_MATCHES_STRUCT(NSZone, returnType)
 
-//iPhoneOS8.1: UIKit
-//------------------
+    //iPhoneOS8.1: UIKit
+    //------------------
     ELSE_IF_MATCHES_STRUCT(UIEdgeInsets, returnType)
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 50000
     ELSE_IF_MATCHES_STRUCT(UIOffset, returnType)
-    ELSE_IF_MATCHES_STRUCT(, returnType)
+#endif
 
-//iPhoneOS8.1: CoreGraphics
-//-------------------------
+    //iPhoneOS8.1: CoreGraphics
+    //-------------------------
     ELSE_IF_MATCHES_STRUCT(CGAffineTransform, returnType)
     ELSE_IF_MATCHES_STRUCT(CGDataConsumerCallbacks, returnType)
     ELSE_IF_MATCHES_STRUCT(CGDataProviderDirectCallbacks, returnType)
     ELSE_IF_MATCHES_STRUCT(CGFunctionCallbacks, returnType)
     ELSE_IF_MATCHES_STRUCT(CGPoint, returnType)
     ELSE_IF_MATCHES_STRUCT(CGSize, returnType)
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 70000
     ELSE_IF_MATCHES_STRUCT(CGVector, returnType)
+#endif
     ELSE_IF_MATCHES_STRUCT(CGRect, returnType)
     ELSE_IF_MATCHES_STRUCT(CGPathElement, returnType)
     ELSE_IF_MATCHES_STRUCT(CGPatternCallbacks, returnType)
