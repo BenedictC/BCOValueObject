@@ -322,7 +322,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         [values appendFormat:@"%@ = %@;\n", name, value];
     });
 
-    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n %@})", NSStringFromClass(self.class), self, values];
+    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n%@})", NSStringFromClass(self.class), self, values];
 
     return description;
 }
