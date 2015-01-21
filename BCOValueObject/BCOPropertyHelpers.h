@@ -63,12 +63,34 @@ static SEL setterSelectorForProperty(objc_property_t property) {
 
     if (setterSelector != NULL) return setterSelector;
 
-    NSString *name = @(property_getName(property));
-    NSString *head = [[name substringWithRange:NSMakeRange(0, 1)] uppercaseString];
-    NSString *body = [name substringWithRange:NSMakeRange(1, name.length-1)];
-    NSString *setterString = [NSString stringWithFormat:@"set%@%@:", head, body];
+    const char *name = property_getName(property);
 
-    return NSSelectorFromString(setterString);
+    const static int bufferSize = 250; //Arbitary, but I'd be very surprised if there are any setters longer than this
+    const unsigned long nameLength = strlen(name);
+
+    if (nameLength < bufferSize - 5) //5 = strlen("set") + strlen(":\0")
+    {
+        //Fast path
+        char selectorBuffer[bufferSize] = "set";
+        strcpy(selectorBuffer + 3, name); //Copy the property name into the buffer
+        selectorBuffer[3] = toupper(selectorBuffer[3]); //Capitalize the first letter
+        selectorBuffer[nameLength+3] = ':'; //Append a colon
+        selectorBuffer[nameLength+4] = '\0'; //Append a null
+
+        NSString *selectorString = @(selectorBuffer);
+        return NSSelectorFromString(selectorString);
+    }
+
+    //Standard(/slow) path
+    NSString *nameStr = @(name);
+    NSMutableString *selectorString = [NSMutableString stringWithCString:"set" encoding:NSUTF8StringEncoding];
+    NSString *head = [[nameStr substringWithRange:NSMakeRange(0, 1)] uppercaseString];
+    [selectorString appendString:head];
+    NSString *body = [nameStr substringWithRange:NSMakeRange(1, nameStr.length-1)];
+    [selectorString appendString:body];
+    [selectorString appendString:@":"];
+
+    return NSSelectorFromString(selectorString);
 }
 
 
