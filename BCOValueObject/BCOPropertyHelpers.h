@@ -49,6 +49,7 @@ static SEL setterSelectorForProperty(objc_property_t property) {
     SEL setterSelector = NULL;
 
     unsigned int count = 0;
+    //Search for an explict setter selector
     objc_property_attribute_t *attribs = property_copyAttributeList(property, &count);
     for (unsigned int i = 0; i < count; i++) {
         objc_property_attribute_t attrib = attribs[i];
@@ -61,14 +62,16 @@ static SEL setterSelectorForProperty(objc_property_t property) {
     }
     free(attribs);
 
-    if (setterSelector != NULL) return setterSelector;
+    BOOL didFindSetter = setterSelector != NULL;
+    if (didFindSetter) return setterSelector;
 
+    //Construct a selector from the property name
     const char *name = property_getName(property);
-
     const static int bufferSize = 250; //Arbitary, but I'd be very surprised if there are any setters longer than this
     const unsigned long nameLength = strlen(name);
 
-    if (nameLength < bufferSize - 5) //5 = strlen("set") + strlen(":\0")
+    BOOL canTakeFastPath = nameLength < bufferSize - 5;
+    if (canTakeFastPath) //5 = strlen("set") + strlen(":\0")
     {
         //Fast path
         char selectorBuffer[bufferSize] = "set";
