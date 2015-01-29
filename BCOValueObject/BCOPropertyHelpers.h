@@ -49,6 +49,7 @@ static SEL setterSelectorForProperty(objc_property_t property) {
     SEL setterSelector = NULL;
 
     unsigned int count = 0;
+    //Search for an explict setter selector
     objc_property_attribute_t *attribs = property_copyAttributeList(property, &count);
     for (unsigned int i = 0; i < count; i++) {
         objc_property_attribute_t attrib = attribs[i];
@@ -61,14 +62,38 @@ static SEL setterSelectorForProperty(objc_property_t property) {
     }
     free(attribs);
 
-    if (setterSelector != NULL) return setterSelector;
+    BOOL didFindSetter = setterSelector != NULL;
+    if (didFindSetter) return setterSelector;
 
-    NSString *name = @(property_getName(property));
-    NSString *head = [[name substringWithRange:NSMakeRange(0, 1)] uppercaseString];
-    NSString *body = [name substringWithRange:NSMakeRange(1, name.length-1)];
-    NSString *setterString = [NSString stringWithFormat:@"set%@%@:", head, body];
+    //Construct a selector from the property name
+    const char *name = property_getName(property);
+    const static int bufferSize = 250; //Arbitary, but I'd be very surprised if there are any setters longer than this
+    const unsigned long nameLength = strlen(name);
 
-    return NSSelectorFromString(setterString);
+    BOOL canTakeFastPath = nameLength < bufferSize - 5;
+    if (canTakeFastPath) //5 = strlen("set") + strlen(":\0")
+    {
+        //Fast path
+        char selectorBuffer[bufferSize] = "set";
+        strcpy(selectorBuffer + 3, name); //Copy the property name into the buffer
+        selectorBuffer[3] = toupper(selectorBuffer[3]); //Capitalize the first letter
+        selectorBuffer[nameLength+3] = ':'; //Append a colon
+        selectorBuffer[nameLength+4] = '\0'; //Append a null
+
+        NSString *selectorString = @(selectorBuffer);
+        return NSSelectorFromString(selectorString);
+    }
+
+    //Standard(/slow) path
+    NSString *nameStr = @(name);
+    NSMutableString *selectorString = [NSMutableString stringWithCString:"set" encoding:NSUTF8StringEncoding];
+    NSString *head = [[nameStr substringWithRange:NSMakeRange(0, 1)] uppercaseString];
+    [selectorString appendString:head];
+    NSString *body = [nameStr substringWithRange:NSMakeRange(1, nameStr.length-1)];
+    [selectorString appendString:body];
+    [selectorString appendString:@":"];
+
+    return NSSelectorFromString(selectorString);
 }
 
 
@@ -181,21 +206,20 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     else if (TYPE_MATCHES_ENCODED_TYPE(double, returnType))    {ADD_SETTER_FOR_NSNUMBER_TYPE(double)}
 
     //Structs
-#if __MAC_OS_X_VERSION_MIN_ALLOWED >= 1000
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1000
     //MacOSX10.10: Foundation
     //-----------------------
-    adsgfd
     ELSE_IF_MATCHES_STRUCT(NSAffineTransformStruct, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSwappedFloat, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSwappedDouble, returnType)
     ELSE_IF_MATCHES_STRUCT(NSDecimal, returnType)
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     ELSE_IF_MATCHES_STRUCT(NSFastEnumerationState, returnType) //10.5
 #endif
     ELSE_IF_MATCHES_STRUCT(NSPoint, returnType)
     ELSE_IF_MATCHES_STRUCT(NSSize, returnType)
     ELSE_IF_MATCHES_STRUCT(NSRect, returnType)
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
     ELSE_IF_MATCHES_STRUCT(NSEdgeInsets, returnType) //10.7
 #endif
     ELSE_IF_MATCHES_STRUCT(NSHashEnumerator, returnType)
@@ -229,16 +253,16 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     ELSE_IF_MATCHES_STRUCT(CGScreenUpdateMoveDelta, returnType) //10.3
     ELSE_IF_MATCHES_STRUCT(CGEventTapInformation, returnType) //10.4
 
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     ELSE_IF_MATCHES_STRUCT(CGDataProviderDirectCallbacks, returnType) //10.5
 #endif
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 1090
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     ELSE_IF_MATCHES_STRUCT(CGVector, returnType) ///10.9
 #endif
     //    ELSE_IF_MATCHES_STRUCT(CGDeviceColor, returnType) //???
 #endif
 
-#if __IPHONE_OS_VERSION_MIN_ALLOWED >= 20000
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 20000
     //iPhoneOS8.1: Foundation
     //-----------------------
     ELSE_IF_MATCHES_STRUCT(NSSwappedFloat, returnType)
@@ -250,16 +274,19 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     //    ELSE_IF_MATCHES_STRUCT(NSMapEnumerator, returnType)
     //    ELSE_IF_MATCHES_STRUCT(NSMapTableKeyCallBacks, returnType)
     //    ELSE_IF_MATCHES_STRUCT(NSMapTableValueCallBacks, returnType)
-#if __IPHONE_OS_VERSION_MIN_ALLOWED >= 80000
+
+    //The version number is wrong in iOS 8.1 (it's 70100) so NSOperatingSystemVersion won't be available until Apple after 8.1. D'oh!
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 80000
     ELSE_IF_MATCHES_STRUCT(NSOperatingSystemVersion, returnType)
 #endif
+
     ELSE_IF_MATCHES_STRUCT(NSRange, returnType)
     //    ELSE_IF_MATCHES_STRUCT(NSZone, returnType)
 
     //iPhoneOS8.1: UIKit
     //------------------
     ELSE_IF_MATCHES_STRUCT(UIEdgeInsets, returnType)
-#if __IPHONE_OS_VERSION_MIN_ALLOWED >= 50000
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 50000
     ELSE_IF_MATCHES_STRUCT(UIOffset, returnType)
 #endif
 
@@ -271,7 +298,7 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     ELSE_IF_MATCHES_STRUCT(CGFunctionCallbacks, returnType)
     ELSE_IF_MATCHES_STRUCT(CGPoint, returnType)
     ELSE_IF_MATCHES_STRUCT(CGSize, returnType)
-#if __IPHONE_OS_VERSION_MIN_ALLOWED >= 70000
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 70000
     ELSE_IF_MATCHES_STRUCT(CGVector, returnType)
 #endif
     ELSE_IF_MATCHES_STRUCT(CGRect, returnType)
