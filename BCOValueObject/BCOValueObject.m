@@ -82,7 +82,11 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             //Create a queue for creating canonical instances
             const char *queueLabel = [@"BCOValueObject.canonicalInstance." stringByAppendingString:NSStringFromClass(immutableClass)].UTF8String;
             dispatch_queue_t queue = dispatch_queue_create(queueLabel, DISPATCH_QUEUE_CONCURRENT);
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 60000 || __MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+            objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, queue, OBJC_ASSOCIATION_RETAIN);
+#else
             objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, (__bridge id)(queue), OBJC_ASSOCIATION_RETAIN);
+#endif
 
             //Create the instance cache if instances are cachable
             if ([self immutableInstanceHasStableHash]) {
@@ -282,8 +286,12 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 {
     NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
-
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 60000 || __MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+    dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+#else
     dispatch_queue_t queue = (__bridge dispatch_queue_t)objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+#endif
+
     NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
 
     //If the cache is nil then instance cannot be cached
