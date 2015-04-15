@@ -31,7 +31,7 @@ static void BCOValueObjectIntializeMutableVariants() {
     @synchronized(__BCOValueObjectMutableSubclassNames) {
         for (NSString *className in [__BCOValueObjectMutableSubclassNames copy]) {
             Class mutableClass = NSClassFromString(className);
-            [mutableClass self]; //Force +initalized to be called.
+            [mutableClass self]; //This implicitly causes +initalized to be called on the mutableClass.
             [__BCOValueObjectMutableSubclassNames removeObject:className];
         }
     }
@@ -82,9 +82,11 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
             //Create a queue for creating canonical instances
             const char *queueLabel = [@"BCOValueObject.canonicalInstance." stringByAppendingString:NSStringFromClass(immutableClass)].UTF8String;
             dispatch_queue_t queue = dispatch_queue_create(queueLabel, DISPATCH_QUEUE_CONCURRENT);
-#define OS_OBJECT_USE_OBJC 0
+#if defined(OS_OBJECT_USE_OBJC) && OS_OBJECT_USE_OBJC != 0
+            objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, queue, OBJC_ASSOCIATION_RETAIN);
+#else
             objc_setAssociatedObject(self, __cannonicalInstancesQueueKey, (__bridge id)(queue), OBJC_ASSOCIATION_RETAIN);
-#undef OS_OBJECT_USE_OBJC
+#endif
 
             //Create the instance cache if instances are cachable
             if ([self immutableInstanceHasStableHash]) {
@@ -266,7 +268,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 +(BOOL)immutableInstanceHasStableHash
 {
-    //If there are weak properties then the hash will change
+    //When a weak property is nil-ed it will result in the objects hash changing therefore we cannot treat cache objects with weak properties.
     __block BOOL hasWeakProperty = NO;
     enumeratePropertiesOfClass(self.immutableClass, ^(objc_property_t property, BOOL *stop) {
         enumerateAttributesOfProperty(property, ^(objc_property_attribute_t attrib, BOOL *stop) {
@@ -284,13 +286,16 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 {
     NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
-#define OS_OBJECT_USE_OBJC 0
+#if defined(OS_OBJECT_USE_OBJC) && OS_OBJECT_USE_OBJC != 0
+    dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+#else
     dispatch_queue_t queue = (__bridge dispatch_queue_t)objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
-#undef OS_OBJECT_USE_OBJC
+#endif
+
     NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
 
-    //If the cache is nil then instance cannot be cached
-    if (cache == nil) return referenceInstance;
+    BOOL isInstanceCachingPermited = cache != nil;
+    if (!isInstanceCachingPermited) return referenceInstance;
 
     NSNumber *hash = @([referenceInstance hash]);
     __block id canonicalInstance = nil;
