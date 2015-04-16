@@ -8,8 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		823C1A521A632F3B00A2224F /* BCOValueObject.m in Sources */ = {isa = PBXBuildFile; fileRef = 823C1A4E1A632F3B00A2224F /* BCOValueObject.m */; };
-		823C1A531A632F3B00A2224F /* BCVPerson.m in Sources */ = {isa = PBXBuildFile; fileRef = 823C1A501A632F3B00A2224F /* BCVPerson.m */; };
-		823C1A541A632F3B00A2224F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 823C1A511A632F3B00A2224F /* main.m */; };
+		8291789D1ADFAF25009A11F0 /* BCVPerson.m in Sources */ = {isa = PBXBuildFile; fileRef = 8291789B1ADFAF0A009A11F0 /* BCVPerson.m */; };
+		8291789E1ADFAF25009A11F0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 8291789C1ADFAF0A009A11F0 /* main.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -28,10 +28,10 @@
 		823C1A4C1A632F3B00A2224F /* BCOPropertyHelpers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BCOPropertyHelpers.h; sourceTree = "<group>"; };
 		823C1A4D1A632F3B00A2224F /* BCOValueObject.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BCOValueObject.h; sourceTree = "<group>"; };
 		823C1A4E1A632F3B00A2224F /* BCOValueObject.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = BCOValueObject.m; sourceTree = "<group>"; };
-		823C1A4F1A632F3B00A2224F /* BCVPerson.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BCVPerson.h; sourceTree = "<group>"; };
-		823C1A501A632F3B00A2224F /* BCVPerson.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = BCVPerson.m; sourceTree = "<group>"; };
-		823C1A511A632F3B00A2224F /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		8290D6441A52C312009B723B /* BCOValueObject */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BCOValueObject; sourceTree = BUILT_PRODUCTS_DIR; };
+		8291789A1ADFAF0A009A11F0 /* BCVPerson.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BCVPerson.h; sourceTree = "<group>"; };
+		8291789B1ADFAF0A009A11F0 /* BCVPerson.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BCVPerson.m; sourceTree = "<group>"; };
+		8291789C1ADFAF0A009A11F0 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,23 +45,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		823B63171A66BF4100F20E59 /* demo */ = {
-			isa = PBXGroup;
-			children = (
-				823C1A4F1A632F3B00A2224F /* BCVPerson.h */,
-				823C1A501A632F3B00A2224F /* BCVPerson.m */,
-				823C1A511A632F3B00A2224F /* main.m */,
-			);
-			name = demo;
-			sourceTree = "<group>";
-		};
 		823C1A4B1A632F3B00A2224F /* BCOValueObject */ = {
 			isa = PBXGroup;
 			children = (
 				823C1A4D1A632F3B00A2224F /* BCOValueObject.h */,
 				823C1A4E1A632F3B00A2224F /* BCOValueObject.m */,
 				823C1A4C1A632F3B00A2224F /* BCOPropertyHelpers.h */,
-				823B63171A66BF4100F20E59 /* demo */,
 			);
 			path = BCOValueObject;
 			sourceTree = "<group>";
@@ -69,6 +58,7 @@
 		8290D63B1A52C312009B723B = {
 			isa = PBXGroup;
 			children = (
+				829178991ADFAF0A009A11F0 /* Demo */,
 				823C1A4B1A632F3B00A2224F /* BCOValueObject */,
 				8290D6451A52C312009B723B /* Products */,
 			);
@@ -80,6 +70,16 @@
 				8290D6441A52C312009B723B /* BCOValueObject */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		829178991ADFAF0A009A11F0 /* Demo */ = {
+			isa = PBXGroup;
+			children = (
+				8291789A1ADFAF0A009A11F0 /* BCVPerson.h */,
+				8291789B1ADFAF0A009A11F0 /* BCVPerson.m */,
+				8291789C1ADFAF0A009A11F0 /* main.m */,
+			);
+			path = Demo;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -138,8 +138,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				823C1A531A632F3B00A2224F /* BCVPerson.m in Sources */,
-				823C1A541A632F3B00A2224F /* main.m in Sources */,
+				8291789D1ADFAF25009A11F0 /* BCVPerson.m in Sources */,
+				8291789E1ADFAF25009A11F0 /* main.m in Sources */,
 				823C1A521A632F3B00A2224F /* BCOValueObject.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

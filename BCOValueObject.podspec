@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "BCOValueObject"
-  s.version      = "0.1"
+  s.version      = "0.2"
   s.summary      = " BCOValueObject is an abstract Objective-C class for implementing value objects."
 
   s.description  = <<-DESC
@@ -86,7 +86,7 @@ Pod::Spec.new do |s|
   #  Supports git, hg, bzr, svn and HTTP.
   #
 
-  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.1" }
+  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.2" }
 
 
   # ――― Source Code ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
@@ -97,10 +97,10 @@ Pod::Spec.new do |s|
   #  Not including the public_header_files will make all headers public.
   #
 
-  s.source_files  = "BCOValueObject", "BCOValueObject/**/*.{h,m}"
+  s.source_files  = "BCOValueObject", "BCOValueObject/*.{h,m}"
   # s.exclude_files = "Classes/Exclude"
 
-  # s.public_header_files = "BCOValueObject/BCOValueObject.h"
+  s.public_header_files = "BCOValueObject/BCOValueObject.h"
 
 
   # ――― Project Settings ――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
