@@ -16,24 +16,24 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "BCOValueObject"
-  s.version      = "0.2"
+  s.version      = "0.3"
   s.summary      = " BCOValueObject is an abstract Objective-C class for implementing value objects."
 
   s.description  = <<-DESC
  BCOValueObject is an abstract class for implementing value objects. BCOValueObject provides equality checking and uniquing and optionally support for mutable variants.
 
  BCOValueObject places the following restrictions on its subclasses:
- - Direct subclasses can only include readonly properties. These properties should only be set by the designated initalizer. Direct subclasses are refered to as 'immutable variants'.
+ - Direct subclasses can only include readonly properties. These properties should only be set by the designated initializer. Direct subclasses are referred to as 'immutable variants'.
  - Immutable variants are thread safe.
  - Immutable variants may be subclassed to create 'mutable variants'. Mutable variants have the following restrictions:
     - Mutable variants must not add properties (direct ivars can be added but this is strongly discouraged).
     - Mutable variants should not be subclassed.
-    - Setter declarations for mutable variants must be listed in a category. Implementations for setters will be automatically generated for most types. If a setter cannot be generated then an exception will be raised when the class is initalized. Setters which cannot be generated must be implemented like so:
+    - Setter declarations for mutable variants must be listed in a category. Implementations for setters will be automatically generated for most types. If a setter cannot be generated then an exception will be raised when the class is initialized. Setters which cannot be generated must be implemented like so:
         -(void)setTransform:(CATransform3D)transform
         {
             [self setValue:[NSValue valueWithCATransform3D:transform] forKey:@"transform"];
         }
-      BCOValueObject overrides setValue:forKey: so that it will not cause an infinte loop when being called from within a setter providing that the class hierarchy requirements listed above are adhered to.
+      BCOValueObject overrides setValue:forKey: so that it will not cause an infinite loop when being called from within a setter providing that the class hierarchy requirements listed above are adhered to.
   - Mutable variants must be registered so that immutable variant can make mutable copies. The simplest way to do this is to call BCO_VALUE_OBJECT_REGISTER_MUTABLE_VARIANT from within the header file where the mutable variant is declared.
  
  Due to the subclassing restrictions protocols should be used to implement polymorphism.
@@ -86,7 +86,7 @@ Pod::Spec.new do |s|
   #  Supports git, hg, bzr, svn and HTTP.
   #
 
-  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.2" }
+  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.3" }
 
 
   # ――― Source Code ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
