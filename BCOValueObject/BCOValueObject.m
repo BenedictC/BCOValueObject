@@ -12,6 +12,23 @@
 
 
 
+#pragma mark - Hash Cache values
+typedef NS_ENUM(NSInteger, BCOHashState) {
+    BCOHashStateUnitialized = 0,
+    BCOHashStateNotCacheableMutable,
+    BCOHashStateNotCacheableWeakProperties,
+    BCOHashStateCached,
+};
+
+
+
+typedef struct {
+    BCOHashState state;
+    NSUInteger value;
+} BCOHash;
+
+
+
 #pragma mark - Mutable Variant Registation
 static NSMutableSet *__BCOValueObjectMutableSubclassNames = nil;
 
@@ -46,8 +63,8 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 @interface BCOValueObject () <NSCopying, NSMutableCopying>
-@property(atomic) NSUInteger bvo_hashValue;
-@property(nonatomic) BOOL bvo_isImmutable;
+-(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName andReturnCanonicalInstance:(BOOL)shouldReturnCanonicalInstance __attribute__((objc_designated_initializer));
+@property(atomic) BCOHash bvo_hash;
 @end
 
 
@@ -211,6 +228,17 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - instance life cycle
 -(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName
 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
+    //We lied! This isn't the designated initalizer - it's the *public* designated initalizer.
+    return [self initWithValues:valuesByPropertyName andReturnCanonicalInstance:YES];
+#pragma clang diagnostic pop
+}
+
+
+
+-(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName andReturnCanonicalInstance:(BOOL)shouldReturnCanonicalInstance
+{
     self = [super init];
     if (self == nil) return nil;
 
@@ -224,11 +252,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         [self setValue:value forKey:key];
     });
 
-    //Freeze!
-    _bvo_isImmutable = [self.class isImmutableVariant];
-
-    BOOL shouldReturnCanonicalInstance = [self.class isImmutableVariant];
-    return (shouldReturnCanonicalInstance) ? [self.class canonicalImmutableInstance:self] : self;
+    return (shouldReturnCanonicalInstance) ? [self.class canonizeInstance:self] : self;
 }
 
 
@@ -282,10 +306,10 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
-+(instancetype)canonicalImmutableInstance:(id)referenceInstance
++(instancetype)canonizeInstance:(id)referenceInstance
 {
-    NSAssert([self isImmutableVariant], @"Only immutable variants may be uniqued.");
     NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
+
 #if defined(OS_OBJECT_USE_OBJC) && OS_OBJECT_USE_OBJC != 0
     dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
 #else
@@ -293,10 +317,10 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #endif
 
     NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
-
     BOOL isInstanceCachingPermited = cache != nil;
     if (!isInstanceCachingPermited) return referenceInstance;
 
+    //Calling hash implicitly freezes an object
     NSNumber *hash = @([referenceInstance hash]);
     __block id canonicalInstance = nil;
     dispatch_sync(queue, ^{
@@ -341,14 +365,17 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 -(NSUInteger)hash
 {
     //If the hash is cached then we're done.
-    if (self.bvo_hashValue != 0)  return self.bvo_hashValue;
+    BCOHash hash = self.bvo_hash;
+    if (self.bvo_hash.state == BCOHashStateCached) {
+        return hash.value;
+    }
 
     Class class = self.class;
     Class immutableClass = class.immutableClass;
 
     //We start with the hash of the class so that a class will always have a non-zero hash value
     //Because immutable and mutable variants should compare as equal we use the immutable classes hash as the seed for the hash.
-    __block NSUInteger hash = ~[immutableClass hash];
+    __block NSUInteger hashValue = ~[immutableClass hash];
 
     //Enumerate each property of the immutable class and incorporate its' values hash into our hash.
     //We only check the immutable class because subclasses are not supposed to add properties.
@@ -357,24 +384,33 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         id value = [self valueForKey:@(name)];
 
         //Incorporate the values hash
-        hash ^= [value hash];
+        hashValue ^= [value hash];
     });
 
-    BOOL isHashCachable = [class isImmutableVariant] && [immutableClass immutableInstanceHasStableHash];
-    if (isHashCachable) {
-        self.bvo_hashValue = hash;
+    //Update self.hash
+    if (hash.state == BCOHashStateUnitialized) {
+        if ([class isMutableVariant]) {
+            hash.state = BCOHashStateNotCacheableMutable;
+        } else if (![immutableClass immutableInstanceHasStableHash]) {
+            hash.state = BCOHashStateNotCacheableWeakProperties;
+        } else {
+            hash.state = BCOHashStateCached;
+            hash.value = hashValue;
+            self.bvo_hash = hash;
+        }
     }
 
-    return hash;
+    return hashValue;
 }
 
 
 
 -(BOOL)isEqual:(id)object
 {
-    if (![object isKindOfClass:self.class.immutableClass]) return NO;
+    BOOL isMutableOrImmutableClass = [object isKindOfClass:self.class.immutableClass];
+    if (!isMutableOrImmutableClass) return NO;
 
-    return self.hash == [object hash];
+    return [self hash] == [object hash];
 }
 
 
@@ -382,7 +418,9 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - KVO
 -(void)setValue:(id)value forKey:(NSString *)key
 {
-    if (self.bvo_isImmutable) {
+    BCOHash hash = self.bvo_hash;
+    BOOL isWritable = hash.state == BCOHashStateNotCacheableMutable || hash.state == BCOHashStateUnitialized;
+    if (!isWritable) {
         [NSException raise:NSInvalidArgumentException format:@"Attempted to set a value of an immutable object."];
         return;
     }
@@ -415,26 +453,21 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - copying
 -(id)copyWithZone:(NSZone *)zone
 {
+    //Immutable objects can just return themselves
     if ([self.class isImmutableVariant]) return self;
 
     Class immutableClass = [self.class immutableClass];
-    BCOValueObject *instance = [immutableClass new];
+    BCOValueObject *instance = [[immutableClass alloc] initWithValues:nil andReturnCanonicalInstance:NO];
 
-    instance.bvo_isImmutable = NO;
-
+    NSAssert(instance.bvo_hash.state != BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
     enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = [self valueForKey:key];
         [instance setValue:value forKey:key];
     });
 
-    instance.bvo_isImmutable = YES;
-
-    if ([self.class isImmutableVariant]) {
-        return [immutableClass canonicalImmutableInstance:instance];
-    }
-
-    return instance;
+    //Canonize
+    return [instance.class canonizeInstance:instance];
 }
 
 
