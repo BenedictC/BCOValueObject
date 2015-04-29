@@ -13,19 +13,19 @@
 
 
 #pragma mark - Hash Cache values
-typedef NS_ENUM(NSInteger, BCOHashState) {
-    BCOHashStateUnitialized = 0,
-    BCOHashStateNotCacheableMutable,
-    BCOHashStateNotCacheableWeakProperties,
-    BCOHashStateCached,
+typedef NS_ENUM(NSInteger, BCOInitalizationState) {
+    BCOInitalizationStateUninitialized = 0,
+    BCOInitalizationStateMutable,
+    BCOInitalizationStateImmutableStableHash,
+    BCOInitalizationStateImmutableUnstableHash,
 };
 
 
 
 typedef struct {
-    BCOHashState state;
-    NSUInteger value;
-} BCOHash;
+    BCOInitalizationState initalizationState;
+    NSUInteger cachedHash;
+} BCOObjectState;
 
 
 
@@ -64,7 +64,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 @interface BCOValueObject () <NSCopying, NSMutableCopying>
 -(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName andReturnCanonicalInstance:(BOOL)shouldReturnCanonicalInstance __attribute__((objc_designated_initializer));
-@property(atomic) BCOHash bvo_hash;
+@property(atomic) BCOObjectState bvo_state;
 @end
 
 
@@ -185,6 +185,10 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 +(BOOL)immutableInstanceHasStableHash
 {
+    if ([self isMutableVariant]) {
+        return [self.immutableClass immutableInstanceHasStableHash];
+    }
+
     //When a weak property is nil-ed it will result in the objects hash changing therefore we cannot treat cache objects with weak properties.
     __block BOOL hasWeakProperty = NO;
     enumeratePropertiesOfClass(self.immutableClass, ^(objc_property_t property, BOOL *stop) {
@@ -301,42 +305,61 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         [self setValue:value forKey:key];
     });
 
-    return (shouldReturnCanonicalInstance) ? [self.class canonizeInstance:self] : self;
+    return (shouldReturnCanonicalInstance) ? [self.class finishInstanceInitalization:self] : self;
 }
 
 
 
-+(instancetype)canonizeInstance:(id)referenceInstance
++(instancetype)finishInstanceInitalization:(BCOValueObject *)pendingInstance
 {
-    NSAssert([referenceInstance class] == self, @"referenceInstance is of a different class.");
+    NSAssert([pendingInstance class] == self, @"referenceInstance is of a different class.");
+    NSAssert(pendingInstance.bvo_state.initalizationState == BCOInitalizationStateUninitialized, @"Attempting to finish initalization of an initalized object.");
 
-#if defined(OS_OBJECT_USE_OBJC) && OS_OBJECT_USE_OBJC != 0
-    dispatch_queue_t queue = objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
-#else
-    dispatch_queue_t queue = (__bridge dispatch_queue_t)objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
-#endif
+    //Finish initalization
+    BCOInitalizationState state = ([self isMutableVariant]) ? BCOInitalizationStateMutable :
+                                  ([self immutableInstanceHasStableHash]) ? BCOInitalizationStateImmutableStableHash :
+                                   BCOInitalizationStateImmutableUnstableHash;
+    NSUInteger hash = (state == BCOInitalizationStateImmutableStableHash) ? [pendingInstance hash] : 0;
+    pendingInstance.bvo_state = (BCOObjectState){.initalizationState = state, .cachedHash = hash};
+
+    //Add object to the cache?
+    BOOL shouldAddToCache = state == BCOInitalizationStateImmutableStableHash;
+    if (!shouldAddToCache) {
+        return pendingInstance;
+    }
 
     NSMapTable *cache = objc_getAssociatedObject(self, __cannonicalInstancesCacheKey);
-    BOOL isInstanceCachingPermited = cache != nil;
-    if (!isInstanceCachingPermited) return referenceInstance;
-
-    //Calling hash implicitly freezes an object
-    NSNumber *hash = @([referenceInstance hash]);
     __block id canonicalInstance = nil;
+    NSNumber *cacheKey = @(hash);
+    dispatch_queue_t queue = ({
+#if defined(OS_OBJECT_USE_OBJC) && OS_OBJECT_USE_OBJC != 0
+        objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+#else
+        (__bridge dispatch_queue_t)objc_getAssociatedObject(self, __cannonicalInstancesQueueKey);
+#endif
+    });
+    NSParameterAssert(cache);
+
+    //read from cache...
     dispatch_sync(queue, ^{
-        canonicalInstance = [cache objectForKey:hash];
+        canonicalInstance = [cache objectForKey:cacheKey];
     });
 
-    if (canonicalInstance != nil) return canonicalInstance;
+    if (canonicalInstance != nil) {
+        return canonicalInstance;
+    }
 
+    //There aren't any objects that match this so add the pending instance to cache
     dispatch_barrier_sync(queue, ^{
         //We have to check again because another write may have occured since we read.
-        canonicalInstance = [cache objectForKey:hash];
-        if (canonicalInstance != nil) return;
+        canonicalInstance = [cache objectForKey:cacheKey];
+        if (canonicalInstance != nil) {
+            return;
+        }
 
         //Update the cache
-        [cache setObject:referenceInstance forKey:hash];
-        canonicalInstance = referenceInstance;
+        [cache setObject:pendingInstance forKey:cacheKey];
+        canonicalInstance = pendingInstance;
     });
 
     return canonicalInstance;
@@ -348,12 +371,16 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 -(id)copyWithZone:(NSZone *)zone
 {
     //Immutable objects can just return themselves
+    //TODO: Is this correct? What about immutable instances with unstable hashes?
     if ([self.class isImmutableVariant]) return self;
 
+    //Create an instance
     Class immutableClass = [self.class immutableClass];
     BCOValueObject *instance = [[immutableClass alloc] initWithValues:nil andReturnCanonicalInstance:NO];
 
-    NSAssert(instance.bvo_hash.state == BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
+    NSAssert(instance.bvo_state.initalizationState == BCOInitalizationStateUninitialized, @"Attempting to modifiy a uniquied instance.");
+
+    //Set properties
     enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = [self valueForKey:key];
@@ -361,7 +388,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     });
 
     //Canonize
-    return [instance.class canonizeInstance:instance];
+    return [instance.class finishInstanceInitalization:instance];
 }
 
 
@@ -395,9 +422,9 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 -(NSUInteger)hash
 {
     //If the hash is cached then we're done.
-    BCOHash hash = self.bvo_hash;
-    if (self.bvo_hash.state == BCOHashStateCached) {
-        return hash.value;
+    BCOObjectState state = self.bvo_state;
+    if (state.initalizationState == BCOInitalizationStateImmutableStableHash) {
+        return state.cachedHash;
     }
 
     Class class = self.class;
@@ -417,19 +444,6 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
         hashValue ^= [value hash];
     });
 
-    //Update self.hash
-    if (hash.state == BCOHashStateUnitialized) {
-        if ([class isMutableVariant]) {
-            hash.state = BCOHashStateNotCacheableMutable;
-        } else if (![immutableClass immutableInstanceHasStableHash]) {
-            hash.state = BCOHashStateNotCacheableWeakProperties;
-        } else {
-            hash.state = BCOHashStateCached;
-            hash.value = hashValue;
-            self.bvo_hash = hash;
-        }
-    }
-
     return hashValue;
 }
 
@@ -448,8 +462,8 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 #pragma mark - KVO
 -(void)setValue:(id)value forKey:(NSString *)key
 {
-    BCOHash hash = self.bvo_hash;
-    BOOL isWritable = hash.state == BCOHashStateNotCacheableMutable || hash.state == BCOHashStateUnitialized;
+    BCOObjectState state = self.bvo_state;
+    BOOL isWritable = state.initalizationState == BCOInitalizationStateUninitialized || state.initalizationState == BCOInitalizationStateMutable;
     if (!isWritable) {
         [NSException raise:NSInvalidArgumentException format:@"Attempted to set a value of an immutable object."];
         return;
