@@ -183,6 +183,22 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
++(BOOL)immutableInstanceHasStableHash
+{
+    //When a weak property is nil-ed it will result in the objects hash changing therefore we cannot treat cache objects with weak properties.
+    __block BOOL hasWeakProperty = NO;
+    enumeratePropertiesOfClass(self.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        enumerateAttributesOfProperty(property, ^(objc_property_attribute_t attrib, BOOL *stop) {
+            if (strcmp(attrib.name, "W") == 0) hasWeakProperty = YES;
+            *stop = hasWeakProperty;
+        });
+        *stop = hasWeakProperty;
+    });
+    return !hasWeakProperty;
+}
+
+
+
 #pragma mark - Mutable class registery
 +(void)getMutableClassesByImmutableClasses:(void(^)(NSMutableDictionary *mutableClassesByImmutableClasses))getter
 {
@@ -226,33 +242,9 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 #pragma mark - instance life cycle
--(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName
+-(instancetype)init
 {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wall"
-    //We lied! This isn't the designated initalizer - it's the *public* designated initalizer.
-    return [self initWithValues:valuesByPropertyName andReturnCanonicalInstance:YES];
-#pragma clang diagnostic pop
-}
-
-
-
--(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName andReturnCanonicalInstance:(BOOL)shouldReturnCanonicalInstance
-{
-    self = [super init];
-    if (self == nil) return nil;
-
-    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
-        NSString *key = @(property_getName(property));
-        id value = valuesByPropertyName[key];
-
-        BOOL isIgnorableValue = (value == nil);
-        if (isIgnorableValue) return;
-
-        [self setValue:value forKey:key];
-    });
-
-    return (shouldReturnCanonicalInstance) ? [self.class canonizeInstance:self] : self;
+    return [self initWithValues:nil];
 }
 
 
@@ -283,25 +275,33 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
--(instancetype)init
+-(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName
 {
-    return [self initWithValues:nil];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
+    //We lied! This isn't the designated initalizer - it's the *public* designated initalizer.
+    return [self initWithValues:valuesByPropertyName andReturnCanonicalInstance:YES];
+#pragma clang diagnostic pop
 }
 
 
 
-+(BOOL)immutableInstanceHasStableHash
+-(instancetype)initWithValues:(NSDictionary *)valuesByPropertyName andReturnCanonicalInstance:(BOOL)shouldReturnCanonicalInstance
 {
-    //When a weak property is nil-ed it will result in the objects hash changing therefore we cannot treat cache objects with weak properties.
-    __block BOOL hasWeakProperty = NO;
-    enumeratePropertiesOfClass(self.immutableClass, ^(objc_property_t property, BOOL *stop) {
-        enumerateAttributesOfProperty(property, ^(objc_property_attribute_t attrib, BOOL *stop) {
-            if (strcmp(attrib.name, "W") == 0) hasWeakProperty = YES;
-            *stop = hasWeakProperty;
-        });
-        *stop = hasWeakProperty;
+    self = [super init];
+    if (self == nil) return nil;
+
+    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *key = @(property_getName(property));
+        id value = valuesByPropertyName[key];
+
+        BOOL isIgnorableValue = (value == nil);
+        if (isIgnorableValue) return;
+
+        [self setValue:value forKey:key];
     });
-    return !hasWeakProperty;
+
+    return (shouldReturnCanonicalInstance) ? [self.class canonizeInstance:self] : self;
 }
 
 
@@ -344,19 +344,49 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
-#pragma mark - debug
--(NSString *)description
+#pragma mark - copying
+-(id)copyWithZone:(NSZone *)zone
 {
-    NSMutableString *values = [NSMutableString new];
-    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
-        NSString *name = @(property_getName(property));
-        id value = [self valueForKey:name];
-        [values appendFormat:@"%@ = %@;\n", name, value];
+    //Immutable objects can just return themselves
+    if ([self.class isImmutableVariant]) return self;
+
+    Class immutableClass = [self.class immutableClass];
+    BCOValueObject *instance = [[immutableClass alloc] initWithValues:nil andReturnCanonicalInstance:NO];
+
+    NSAssert(instance.bvo_hash.state == BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
+    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *key = @(property_getName(property));
+        id value = [self valueForKey:key];
+        [instance setValue:value forKey:key];
     });
 
-    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n%@})", NSStringFromClass(self.class), self, values];
+    //Canonize
+    return [instance.class canonizeInstance:instance];
+}
 
-    return description;
+
+
+-(id)mutableCopyWithZone:(NSZone *)zone
+{
+    //Ensure that the mutable variant has been initalized
+    BCOValueObjectIntializeMutableVariants();
+
+    Class mutableClass = [BCOValueObject mutableClassForImmutableClass:[self.class immutableClass]];
+    if (mutableClass == Nil) {
+        [NSException raise:NSInvalidArgumentException format:@"Attempted to make a mutable copy of an immutable class which does not have registered mutable variant."];
+        return nil;
+    }
+
+    BCOValueObject *instance = [mutableClass new];
+
+    Class immutableClass = [self.class immutableClass];
+    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *key = @(property_getName(property));
+        id value = [self valueForKey:key];
+        [instance setValue:value forKey:key];
+    });
+    
+    return instance;
 }
 
 
@@ -450,49 +480,19 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
 
 
 
-#pragma mark - copying
--(id)copyWithZone:(NSZone *)zone
+#pragma mark - debug
+-(NSString *)description
 {
-    //Immutable objects can just return themselves
-    if ([self.class isImmutableVariant]) return self;
-
-    Class immutableClass = [self.class immutableClass];
-    BCOValueObject *instance = [[immutableClass alloc] initWithValues:nil andReturnCanonicalInstance:NO];
-
-    NSAssert(instance.bvo_hash.state == BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
-    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
-        NSString *key = @(property_getName(property));
-        id value = [self valueForKey:key];
-        [instance setValue:value forKey:key];
+    NSMutableString *values = [NSMutableString new];
+    enumeratePropertiesOfClass(self.class.immutableClass, ^(objc_property_t property, BOOL *stop) {
+        NSString *name = @(property_getName(property));
+        id value = [self valueForKey:name];
+        [values appendFormat:@"%@ = %@;\n", name, value];
     });
 
-    //Canonize
-    return [instance.class canonizeInstance:instance];
-}
+    NSString *description = [NSString stringWithFormat:@"<%@: %p> (values: {\n%@})", NSStringFromClass(self.class), self, values];
 
-
-
--(id)mutableCopyWithZone:(NSZone *)zone
-{
-    //Ensure that the mutable variant has been initalized
-    BCOValueObjectIntializeMutableVariants();
-
-    Class mutableClass = [BCOValueObject mutableClassForImmutableClass:[self.class immutableClass]];
-    if (mutableClass == Nil) {
-        [NSException raise:NSInvalidArgumentException format:@"Attempted to make a mutable copy of an immutable class which does not have registered mutable variant."];
-        return nil;
-    }
-
-    BCOValueObject *instance = [mutableClass new];
-
-    Class immutableClass = [self.class immutableClass];
-    enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
-        NSString *key = @(property_getName(property));
-        id value = [self valueForKey:key];
-        [instance setValue:value forKey:key];
-    });
-
-    return instance;
+    return description;
 }
 
 @end
