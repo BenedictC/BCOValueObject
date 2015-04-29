@@ -459,7 +459,7 @@ static const void * const __cannonicalInstancesCacheKey = &__cannonicalInstances
     Class immutableClass = [self.class immutableClass];
     BCOValueObject *instance = [[immutableClass alloc] initWithValues:nil andReturnCanonicalInstance:NO];
 
-    NSAssert(instance.bvo_hash.state != BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
+    NSAssert(instance.bvo_hash.state == BCOHashStateUnitialized, @"Attempting to modifiy a uniquied instance.");
     enumeratePropertiesOfClass(immutableClass, ^(objc_property_t property, BOOL *stop) {
         NSString *key = @(property_getName(property));
         id value = [self valueForKey:key];
