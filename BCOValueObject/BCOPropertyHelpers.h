@@ -205,6 +205,12 @@ static BOOL addSetterToClassForPropertyFromClass(Class mutableClass, objc_proper
     else if (TYPE_MATCHES_ENCODED_TYPE(float, returnType))     {ADD_SETTER_FOR_NSNUMBER_TYPE(float)}
     else if (TYPE_MATCHES_ENCODED_TYPE(double, returnType))    {ADD_SETTER_FOR_NSNUMBER_TYPE(double)}
 
+    else if (TYPE_MATCHES_ENCODED_TYPE(unsigned char, returnType))      {ADD_SETTER_FOR_NSNUMBER_TYPE(unsigned char)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(unsigned short, returnType))     {ADD_SETTER_FOR_NSNUMBER_TYPE(unsigned short)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(unsigned int, returnType))       {ADD_SETTER_FOR_NSNUMBER_TYPE(unsigned int)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(unsigned long, returnType))      {ADD_SETTER_FOR_NSNUMBER_TYPE(unsigned long)}
+    else if (TYPE_MATCHES_ENCODED_TYPE(unsigned long long, returnType)) {ADD_SETTER_FOR_NSNUMBER_TYPE(unsigned long long)}
+
     //Structs
 #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1000
     //MacOSX10.10: Foundation
