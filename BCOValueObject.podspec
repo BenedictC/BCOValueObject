@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "BCOValueObject"
-  s.version      = "0.3"
+  s.version      = "0.4"
   s.summary      = " BCOValueObject is an abstract Objective-C class for implementing value objects."
 
   s.description  = <<-DESC
@@ -86,7 +86,7 @@ Pod::Spec.new do |s|
   #  Supports git, hg, bzr, svn and HTTP.
   #
 
-  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.3" }
+  s.source       = { :git => "https://github.com/BenedictC/BCOValueObject.git", :tag => "0.4" }
 
 
   # ――― Source Code ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
